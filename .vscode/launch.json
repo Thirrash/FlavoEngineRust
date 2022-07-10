@@ -1,0 +1,47 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Run Dev",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--profile", "dev"
+                ]
+            },
+            "program": "${cargo:program}",
+            "args": []
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Run Release",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--profile", "release"
+                ]
+            },
+            "program": "${cargo:program}",
+            "args": []
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Run Bench",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--profile", "bench"
+                ]
+            },
+            "program": "${cargo:program}",
+            "args": []
+        }
+    ]
+}
