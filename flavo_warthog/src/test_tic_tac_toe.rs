@@ -75,7 +75,7 @@ fn get_input() -> Option<usize> {
     return Some(val);
 }
 
-fn main() {
+pub fn run_tic_tac_toe() {
     println!("Welcome to the Tic-Tac-Toe game!");
     let mut board: Board = [[FieldInfo::Empty; NUM_FIELDS]; NUM_FIELDS];
 
