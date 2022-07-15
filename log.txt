@@ -1,0 +1,2 @@
+[DEBG] Retrieved value from flavo_engine: 2137
+[ERRO] Just another shit
