@@ -2,36 +2,45 @@ use std::fs::File;
 use std::io::Write;
 
 const LOG_FILE: &'static str = "log.txt";
+pub const LOG_ENABLE: bool = cfg!(debug_assertions);
 
 #[macro_export]
 macro_rules! log_error {
     ($($arg:tt)*) => {{
-        let res: String = format!($($arg)*);
-        $crate::logger::log::log("[ERRO]", &res[..]);
+        if $crate::logger::log::LOG_ENABLE {
+            let res: String = format!($($arg)*);
+            $crate::logger::log::log("[ERRO]", &res[..]);
+        }
     }}
 }
 
 #[macro_export]
 macro_rules! log_warn {
     ($($arg:tt)*) => {{
-        let res: String = format!($($arg)*);
-        $crate::logger::log::log("[WARN]", &res[..]);
+        if $crate::logger::log::LOG_ENABLE {
+            let res: String = format!($($arg)*);
+            $crate::logger::log::log("[WARN]", &res[..]);
+        }
     }}
 }
 
 #[macro_export]
 macro_rules! log_info {
     ($($arg:tt)*) => {{
-        let res: String = format!($($arg)*);
-        $crate::logger::log::log("[INFO]", &res[..]);
+        if $crate::logger::log::LOG_ENABLE {
+            let res: String = format!($($arg)*);
+            $crate::logger::log::log("[INFO]", &res[..]);
+        }
     }}
 }
 
 #[macro_export]
 macro_rules! log_debug {
     ($($arg:tt)*) => {{
-        let res: String = format!($($arg)*);
-        $crate::logger::log::log("[DEBG]", &res[..]);
+        if $crate::logger::log::LOG_ENABLE {
+            let res: String = format!($($arg)*);
+            $crate::logger::log::log("[DEBG]", &res[..]);
+        }
     }}
 }
 

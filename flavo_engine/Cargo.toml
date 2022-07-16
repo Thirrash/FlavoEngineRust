@@ -7,3 +7,12 @@ edition = "2021"
 debug = []
 
 [dependencies]
+# Vulkan
+vulkano = "0.29.0"
+vulkano-shaders = "0.29.0"
+vulkano-win = "0.29.0"
+winit = "0.26"
+bytemuck = "1.8.0"
+
+# Dear ImGUI
+imgui-vulkano-renderer = "0.7.3"
