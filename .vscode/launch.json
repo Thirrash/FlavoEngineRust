@@ -17,7 +17,9 @@
             },
             "program": "${cargo:program}",
             "terminal": "external",
-            "args": []
+            "args": [],
+            "env": { "RUST_BACKTRACE": "1" },
+            "cwd": "${workspaceFolder}"
         },
         {
             "type": "lldb",
@@ -31,7 +33,8 @@
             },
             "program": "${cargo:program}",
             "terminal": "external",
-            "args": []
+            "args": [],
+            "cwd": "${workspaceFolder}"
         },
         {
             "type": "lldb",
@@ -45,7 +48,8 @@
             },
             "program": "${cargo:program}",
             "terminal": "external",
-            "args": []
+            "args": [],
+            "cwd": "${workspaceFolder}"
         }
     ]
 }

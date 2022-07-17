@@ -16,3 +16,9 @@ bytemuck = "1.8.0"
 
 # Dear ImGUI
 imgui-vulkano-renderer = "0.7.3"
+
+# Resources
+gltf = "1.0"
+
+# Other
+rand = "0.8.5"
