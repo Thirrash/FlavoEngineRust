@@ -1,15 +1,15 @@
 mod fragment_shader;
 mod vertex_shader;
 
-use crate::renderer::{vertex_format::VertexSimple, buffer::RenderBuffer};
+use crate::renderer::{vertex_format::VertexSimple, render_queue::RenderQueue};
 use std::{error::Error, sync::Arc};
-use vulkano::{instance::{Instance, InstanceCreateInfo}, device::{physical::{PhysicalDevice, PhysicalDeviceType, QueueFamily}, Device, DeviceCreateInfo, QueueCreateInfo, Queue, DeviceExtensions}, image::{view::ImageView, ImageUsage, SwapchainImage}, render_pass::{Framebuffer, FramebufferCreateInfo, Subpass, RenderPass}, command_buffer::{AutoCommandBufferBuilder, CommandBufferUsage, SubpassContents, PrimaryAutoCommandBuffer, CommandBufferExecFuture, pool::standard::StandardCommandPoolAlloc}, pipeline::{graphics::{viewport::{Viewport, ViewportState}, vertex_input::BuffersDefinition, input_assembly::InputAssemblyState}, GraphicsPipeline}, swapchain::{Swapchain, SwapchainCreateInfo, AcquireError, SwapchainCreationError, acquire_next_image, Surface, PresentFuture, SwapchainAcquireFuture}, shader::ShaderModule, sync::{FlushError, self, GpuFuture, FenceSignalFuture, JoinFuture}};
+use vulkano::{instance::{Instance, InstanceCreateInfo}, device::{physical::{PhysicalDevice, PhysicalDeviceType, QueueFamily}, Device, DeviceCreateInfo, QueueCreateInfo, Queue, DeviceExtensions}, image::{view::ImageView, ImageUsage, SwapchainImage}, render_pass::{Framebuffer, FramebufferCreateInfo, Subpass, RenderPass}, command_buffer::{AutoCommandBufferBuilder, CommandBufferUsage, SubpassContents, PrimaryAutoCommandBuffer, CommandBufferExecFuture, pool::standard::StandardCommandPoolAlloc}, pipeline::{graphics::{viewport::{Viewport, ViewportState}, vertex_input::BuffersDefinition, input_assembly::InputAssemblyState}, GraphicsPipeline}, swapchain::{Swapchain, SwapchainCreateInfo, AcquireError, SwapchainCreationError, acquire_next_image, Surface, PresentFuture, SwapchainAcquireFuture, PresentMode}, shader::ShaderModule, sync::{FlushError, self, GpuFuture, FenceSignalFuture, JoinFuture}};
 use vulkano_win::VkSurfaceBuild;
 use winit::{event_loop::{EventLoop}, window::{WindowBuilder, Window}};
 
 use crate::log_debug;
 
-use super::Renderer;
+use super::render_item::RenderItem;
 
 pub struct VulkanRenderer {
     // Renderer structures
@@ -18,7 +18,7 @@ pub struct VulkanRenderer {
     queue: Arc<Queue>,
     swapchain: Arc<Swapchain<Window>>,
     pipeline: Arc<GraphicsPipeline>,
-    render_buffer: RenderBuffer,
+    render_queue: RenderQueue,
     viewport: Viewport,
     command_buffers: Vec<Arc<PrimaryAutoCommandBuffer>>,
     surface: Arc<Surface<Window>>,
@@ -34,26 +34,31 @@ pub struct VulkanRenderer {
     fences: Vec<Option<Arc<FenceSignalFuture<PresentFuture<CommandBufferExecFuture<JoinFuture<Box<dyn GpuFuture>, SwapchainAcquireFuture<Window>>, Arc<PrimaryAutoCommandBuffer<StandardCommandPoolAlloc>>>, Window>>>>>
 }
 
-impl Renderer for VulkanRenderer {
-    fn schedule_resize(&mut self) {
+impl VulkanRenderer {
+    pub fn schedule_resize(&mut self) {
         self.window_resized = true;
     }
 
-    fn add_vertices(&mut self, vertices: Vec<VertexSimple>) {
-        self.render_buffer.add_vertices(vertices);
+    #[profiling::function]
+    pub fn add_mesh(&mut self, vertices: Vec<VertexSimple>, indices: Vec<u32>) {
+        self.render_queue.add_render_item(RenderItem::new(
+           &self.queue, vertices, indices
+        ));
     }
 
-    fn update(&mut self) -> Result<(), Box<dyn Error>> {
+    #[profiling::function]
+    pub fn update(&mut self) -> Result<(), Box<dyn Error>> {
         // We cannot render anything if there is no vertex data
-        if !self.render_buffer.has_any_data() {
+        if !self.render_queue.has_any_data() {
             return Ok(());
         }
 
         self.command_buffers = get_command_buffers(
-            &self.device, &self.queue, &self.pipeline, &self.framebuffers, &self.render_buffer,
+            &self.device, &self.queue, &self.pipeline, &self.framebuffers, &self.render_queue,
         )?;
 
         if self.window_resized || self.recreate_swapchain {
+            profiling::scope!("Window resized");
             self.recreate_swapchain = false;
 
             let new_dimensions = self.surface.window().inner_size();
@@ -77,7 +82,7 @@ impl Renderer for VulkanRenderer {
                 let new_pipeline = get_pipeline(
                     &self.device, &self.vertex_shader, &self.fragment_shader, self.viewport.clone(), &self.render_pass).unwrap();
                 self.command_buffers = get_command_buffers(
-                    &self.device, &self.queue, &new_pipeline, &&self.framebuffers, &self.render_buffer).unwrap();
+                    &self.device, &self.queue, &new_pipeline, &&self.framebuffers, &self.render_queue).unwrap();
             }
         }
 
@@ -97,6 +102,7 @@ impl Renderer for VulkanRenderer {
 
         // wait for the fence related to this image to finish (normally this would be the oldest fence)
         if let Some(image_fence) = &self.fences[image_i] {
+            profiling::scope!("Wait for fence");
             image_fence.wait(None).unwrap();
         }
 
@@ -111,13 +117,29 @@ impl Renderer for VulkanRenderer {
             Some(fence) => fence.boxed(),
         };
 
+        profiling::scope!("Join and present");
         let future = previous_future
-            .join(acquire_future)
-            .then_execute(self.queue.clone(), self.command_buffers[image_i].clone())
-            .unwrap()
-            .then_swapchain_present(self.queue.clone(), self.swapchain.clone(), image_i)
-            .then_signal_fence_and_flush();
+            .join(acquire_future);
+        let future = (|| {
+            profiling::scope!("Then execute");
+            return future
+                .then_execute(self.queue.clone(), self.command_buffers[image_i].clone())
+                .unwrap();
+        })();
+        let future = (|| {
+            profiling::scope!("Then sawpchain");
+            return future
+                .then_swapchain_present(self.queue.clone(), self.swapchain.clone(), image_i);
+        })();
+        let future = (|| {
+            profiling::scope!("Then signal fence");
+            return future
+                .then_signal_fence_and_flush();
+        })();
+            
 
+        {
+            profiling::scope!("Match future");
         self.fences[image_i] = match future {
             Ok(value) => Some(Arc::new(value)),
             Err(FlushError::OutOfDate) => {
@@ -129,13 +151,12 @@ impl Renderer for VulkanRenderer {
                 None
             }
         };
+        }
 
         self.previous_fence_i = image_i;
         return Ok(());
     }
-}
 
-impl VulkanRenderer {
     pub fn new(event_loop: &EventLoop<()>) -> Result<VulkanRenderer, Box<dyn Error>> {
         // Implement vertex buffer structs
         vulkano::impl_vertex!(VertexSimple, position);
@@ -188,6 +209,7 @@ impl VulkanRenderer {
                 image_extent: dimensions.into(),
                 image_usage: ImageUsage::color_attachment(), // What the images are going to be used for
                 composite_alpha,
+                present_mode: PresentMode::Immediate,
                 ..Default::default()
             },
         )?;
@@ -208,7 +230,7 @@ impl VulkanRenderer {
         let pipeline = get_pipeline(&device, &vs, &fs, viewport.clone(), &render_pass)?;
 
         // Prepare vertex and index buffers
-        let render_buffer = RenderBuffer::new();
+        let render_queue = RenderQueue::new();
 
         // Prepare command buffers
         let command_buffers = get_command_buffers(
@@ -216,7 +238,7 @@ impl VulkanRenderer {
             &queue,
             &pipeline,
             &framebuffers,
-            &render_buffer,
+            &render_queue,
         )?;
 
         let frames_in_flight = images.len();
@@ -226,7 +248,7 @@ impl VulkanRenderer {
             queue: queue,
             swapchain: swapchain,
             pipeline: pipeline,
-            render_buffer: render_buffer,
+            render_queue: render_queue,
             command_buffers: command_buffers,
             framebuffers: framebuffers,
             fences: vec![None; frames_in_flight],
@@ -295,22 +317,23 @@ fn get_pipeline(device: &Arc<Device>, vs: &Arc<ShaderModule>, fs: &Arc<ShaderMod
     return Ok(pipeline);
 }
 
+#[profiling::function]
 fn get_command_buffers(device: &Arc<Device>, queue: &Arc<Queue>, pipeline: &Arc<GraphicsPipeline>,
-    framebuffers: &Vec<Arc<Framebuffer>>, render_buffer: &RenderBuffer)
+    framebuffers: &Vec<Arc<Framebuffer>>, render_queue: &RenderQueue)
     -> Result<Vec<Arc<PrimaryAutoCommandBuffer>>, Box<dyn Error>> {
     // We cannot create any command buffers if there is no vertex data
-    if !render_buffer.has_any_data() {
+    if !render_queue.has_any_data() {
         return Ok(Default::default());
     }
 
-    let vertex_buffer_span = render_buffer.create_vertex_buffer(device)?;
     framebuffers
         .iter()
         .map(|framebuffer| -> Result<Arc<PrimaryAutoCommandBuffer>, Box<dyn Error>> {
+            profiling::scope!("Command buffer creation");
             let mut builder = AutoCommandBufferBuilder::primary(
                 device.clone(),
                 queue.family(),
-                CommandBufferUsage::MultipleSubmit,  // don't forget to write the correct buffer usage
+                CommandBufferUsage::OneTimeSubmit,
             )?;
             builder
                 .begin_render_pass(
@@ -318,9 +341,11 @@ fn get_command_buffers(device: &Arc<Device>, queue: &Arc<Queue>, pipeline: &Arc<
                     SubpassContents::Inline,
                     vec![[0.0, 0.0, 1.0, 1.0].into()],
                 )?
-                .bind_pipeline_graphics(pipeline.clone())
-                .bind_vertex_buffers(0, vertex_buffer_span.buffer.clone())
-                .draw(vertex_buffer_span.num_used as u32, 1, 0, 0)?
+                .bind_pipeline_graphics(pipeline.clone());
+
+            render_queue.draw_all(&mut builder)?;
+
+            builder
                 .end_render_pass()?;
             return Ok(Arc::new(builder.build()?));
         }).collect()

@@ -1,15 +1,17 @@
 use std::{error::Error, sync::Mutex};
 use winit::{event_loop::{EventLoop, ControlFlow}, event::{Event, WindowEvent, KeyboardInput, VirtualKeyCode}, platform::run_return::EventLoopExtRunReturn};
-use crate::{renderer::Renderer, game::Game};
+use crate::{game::Game};
+
+use super::vulkan::VulkanRenderer;
 
 pub struct GameWindow<'a> {
     event_loop: EventLoop<()>,
     game: &'a mut Game<'a>,
-    renderer: &'a Mutex<&'a mut Box<dyn Renderer>>
+    renderer: &'a Mutex<&'a mut VulkanRenderer>
 }
 
 impl<'a> GameWindow<'a> {
-    pub fn new(event_loop: EventLoop<()>, game: &'a mut Game<'a>, renderer: &'a Mutex<&'a mut Box<dyn Renderer>>) -> GameWindow<'a> {
+    pub fn new(event_loop: EventLoop<()>, game: &'a mut Game<'a>, renderer: &'a Mutex<&'a mut VulkanRenderer>) -> GameWindow<'a> {
         return GameWindow {
             event_loop: event_loop,
             game: game,
@@ -18,6 +20,8 @@ impl<'a> GameWindow<'a> {
     }
 
     pub fn run_event_loop(mut self) -> Result<(), Box<dyn Error>> {
+        //optick::start_capture();
+        profiling::register_thread!("Main Thread");
         self.event_loop.run_return(move |event, _, control_flow| match event {
             Event::WindowEvent { event, .. } => match event {
                 WindowEvent::CloseRequested => {
@@ -37,6 +41,7 @@ impl<'a> GameWindow<'a> {
                 _ => ()
             },
             Event::MainEventsCleared => {
+                profiling::finish_frame!();
                 self.game.update().expect("Game update failed");
                 self.renderer.lock().expect("Couldn't acquire lock").update().expect("Render update failed");
                 self.game.synchronize().expect("Sync window update failed");
@@ -44,6 +49,7 @@ impl<'a> GameWindow<'a> {
             _ => (),
         });
 
+        //optick::stop_capture("flavo_profile");
         return Ok(());
     }
 }
