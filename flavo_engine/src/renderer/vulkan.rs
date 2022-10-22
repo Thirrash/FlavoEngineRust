@@ -3,7 +3,7 @@ mod vertex_shader;
 
 use crate::renderer::{vertex_format::VertexSimple, render_queue::RenderQueue};
 use std::{error::Error, sync::Arc};
-use vulkano::{instance::{Instance, InstanceCreateInfo}, device::{physical::{PhysicalDevice, PhysicalDeviceType, QueueFamily}, Device, DeviceCreateInfo, QueueCreateInfo, Queue, DeviceExtensions}, image::{view::ImageView, ImageUsage, SwapchainImage}, render_pass::{Framebuffer, FramebufferCreateInfo, Subpass, RenderPass}, command_buffer::{AutoCommandBufferBuilder, CommandBufferUsage, SubpassContents, PrimaryAutoCommandBuffer, CommandBufferExecFuture, pool::standard::StandardCommandPoolAlloc}, pipeline::{graphics::{viewport::{Viewport, ViewportState}, vertex_input::BuffersDefinition, input_assembly::InputAssemblyState}, GraphicsPipeline}, swapchain::{Swapchain, SwapchainCreateInfo, AcquireError, SwapchainCreationError, acquire_next_image, Surface, PresentFuture, SwapchainAcquireFuture, PresentMode}, shader::ShaderModule, sync::{FlushError, self, GpuFuture, FenceSignalFuture, JoinFuture}};
+use vulkano::{instance::{Instance, InstanceCreateInfo}, device::{physical::{PhysicalDevice, PhysicalDeviceType, QueueFamily}, Device, DeviceCreateInfo, QueueCreateInfo, Queue, DeviceExtensions}, image::{view::ImageView, ImageUsage, SwapchainImage}, render_pass::{Framebuffer, FramebufferCreateInfo, Subpass, RenderPass}, command_buffer::{AutoCommandBufferBuilder, CommandBufferUsage, SubpassContents, PrimaryAutoCommandBuffer, CommandBufferExecFuture, pool::standard::StandardCommandPoolAlloc, RenderPassBeginInfo}, pipeline::{graphics::{viewport::{Viewport, ViewportState}, vertex_input::BuffersDefinition, input_assembly::InputAssemblyState}, GraphicsPipeline}, swapchain::{Swapchain, SwapchainCreateInfo, AcquireError, SwapchainCreationError, acquire_next_image, Surface, PresentFuture, SwapchainAcquireFuture, PresentMode}, shader::ShaderModule, sync::{FlushError, self, GpuFuture, FenceSignalFuture, JoinFuture}, format::ClearValue};
 use vulkano_win::VkSurfaceBuild;
 use winit::{event_loop::{EventLoop}, window::{WindowBuilder, Window}};
 
@@ -183,7 +183,7 @@ impl VulkanRenderer {
                 // here we pass the desired queue families that we want to use
                 queue_create_infos: vec![QueueCreateInfo::family(queue_family)],
                 enabled_extensions: physical_device
-                    .required_extensions()
+                    .supported_extensions()
                     .union(&device_extensions),
                 ..Default::default()
             },
@@ -335,11 +335,11 @@ fn get_command_buffers(device: &Arc<Device>, queue: &Arc<Queue>, pipeline: &Arc<
                 queue.family(),
                 CommandBufferUsage::OneTimeSubmit,
             )?;
+            let render_pass_info = RenderPassBeginInfo::framebuffer(framebuffer.clone());
             builder
                 .begin_render_pass(
-                    framebuffer.clone(),
-                    SubpassContents::Inline,
-                    vec![[0.0, 0.0, 1.0, 1.0].into()],
+                    render_pass_info,
+                    SubpassContents::Inline
                 )?
                 .bind_pipeline_graphics(pipeline.clone());
 
